@@ -1,27 +1,30 @@
 use std::collections::HashMap;
 
 #[derive(Debug, PartialEq, Eq)]
+struct Variable(usize);
+
+#[derive(Debug, PartialEq, Eq)]
 struct Literal(usize);
 
 impl Literal {
-    fn new(variable: usize, negate: bool) -> Literal {
-        Literal((variable << 1) + if negate { 1 } else { 0 })
+    fn new(variable: Variable, negate: bool) -> Literal {
+        Literal((variable.0 << 1) + if negate { 1 } else { 0 })
     }
 
-    fn pos(variable: usize) -> Literal {
-        Literal(variable << 1)
+    fn pos(variable: Variable) -> Literal {
+        Literal(variable.0 << 1)
     }
 
-    fn neg(variable: usize) -> Literal {
-        Literal((variable << 1) + 1)
+    fn neg(variable: Variable) -> Literal {
+        Literal((variable.0 << 1) + 1)
     }
 
     fn negate(&self) -> Literal {
         Literal(self.0 ^ 0x1)
     }
 
-    fn variable(&self) -> usize {
-        self.0 >> 1
+    fn variable(&self) -> Variable {
+        Variable(self.0 >> 1)
     }
 
     fn is_neg(&self) -> bool {
@@ -46,14 +49,14 @@ impl Sat {
         }
     }
 
-    fn get_variable(&mut self, name: &str) -> usize {
+    fn get_variable(&mut self, name: &str) -> Variable {
         if let Some(&variable) = self.variable_table.get(name) {
-            return variable;
+            return Variable(variable);
         }
         let variable = self.variables.len();
         self.variables.push(name.into());
         self.variable_table.insert(name.into(), variable);
-        variable
+        Variable(variable)
     }
 
     pub fn parse_and_add_clause(&mut self, text: &str) -> Result<(), ()> {
@@ -96,7 +99,7 @@ impl Sat {
 mod tests {
     use std::collections::HashMap;
 
-    use super::{Literal, Sat};
+    use super::{Literal, Variable, Sat};
 
     #[test]
     fn test_parse() {
@@ -112,7 +115,11 @@ mod tests {
             sat.variables,
             vec!["A", "B", "C"].into_iter().map(Into::into).collect::<Vec<String>>(),
         );
-        assert_eq!(sat.clauses, vec![vec![Literal::pos(0), Literal::pos(1), Literal::neg(2)]]);
+        assert_eq!(sat.clauses, vec![vec![
+            Literal::pos(Variable(0)),
+            Literal::pos(Variable(1)),
+            Literal::neg(Variable(2)),
+        ]]);
 
         let mut sat = Sat::new();
         sat.parse_and_add_clause(" ~A B ").unwrap();
@@ -120,7 +127,10 @@ mod tests {
             sat.variables,
             vec!["A", "B"].into_iter().map(Into::into).collect::<Vec<String>>(),
         );
-        assert_eq!(sat.clauses, vec![vec![Literal::neg(0), Literal::pos(1)]]);
+        assert_eq!(sat.clauses, vec![vec![
+            Literal::neg(Variable(0)),
+            Literal::pos(Variable(1)),
+        ]]);
 
         let mut sat = Sat::new();
         sat.parse_and_add_clause("A B ~").unwrap_err();
