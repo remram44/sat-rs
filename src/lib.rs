@@ -1,9 +1,10 @@
 use std::collections::HashMap;
+use std::fmt;
 
 #[derive(Debug, PartialEq, Eq)]
 struct Variable(usize);
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 struct Literal(usize);
 
 impl Literal {
@@ -17,6 +18,17 @@ impl Literal {
 
     fn is_neg(&self) -> bool {
         self.0 & 0x1 == 0x1
+    }
+}
+
+impl fmt::Debug for Literal {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "Literal({}{})",
+            if self.is_neg() { "~" } else { " " },
+            self.variable().0,
+        )
     }
 }
 
