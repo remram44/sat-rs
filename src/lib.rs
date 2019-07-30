@@ -11,18 +11,6 @@ impl Literal {
         Literal((variable.0 << 1) + if negate { 1 } else { 0 })
     }
 
-    fn pos(variable: Variable) -> Literal {
-        Literal(variable.0 << 1)
-    }
-
-    fn neg(variable: Variable) -> Literal {
-        Literal((variable.0 << 1) + 1)
-    }
-
-    fn negate(&self) -> Literal {
-        Literal(self.0 ^ 0x1)
-    }
-
     fn variable(&self) -> Variable {
         Variable(self.0 >> 1)
     }
@@ -116,9 +104,9 @@ mod tests {
             vec!["A", "B", "C"].into_iter().map(Into::into).collect::<Vec<String>>(),
         );
         assert_eq!(sat.clauses, vec![vec![
-            Literal::pos(Variable(0)),
-            Literal::pos(Variable(1)),
-            Literal::neg(Variable(2)),
+            Literal::new(Variable(0), false),
+            Literal::new(Variable(1), false),
+            Literal::new(Variable(2), true),
         ]]);
 
         let mut sat = Sat::new();
@@ -128,8 +116,8 @@ mod tests {
             vec!["A", "B"].into_iter().map(Into::into).collect::<Vec<String>>(),
         );
         assert_eq!(sat.clauses, vec![vec![
-            Literal::neg(Variable(0)),
-            Literal::pos(Variable(1)),
+            Literal::new(Variable(0), true),
+            Literal::new(Variable(1), false),
         ]]);
 
         let mut sat = Sat::new();
