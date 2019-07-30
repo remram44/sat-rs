@@ -1,11 +1,32 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
-#[derive(Debug, PartialEq, Eq)]
-struct Variable(usize);
+/// A variable, which can be used in a Clause
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Variable(usize);
 
+impl Variable {
+    /// Create a Literal that is the negation of this variable
+    pub fn negate(&self) -> Literal {
+        Literal::new(*self, true)
+    }
+}
+
+impl Into<Literal> for &Variable {
+    fn into(self) -> Literal {
+        Literal::new(*self, false)
+    }
+}
+
+impl Into<Literal> for Variable {
+    fn into(self) -> Literal {
+        Literal::new(self, false)
+    }
+}
+
+/// A literal is a component of a Clause
 #[derive(PartialEq, Eq)]
-struct Literal(usize);
+pub struct Literal(usize);
 
 impl Literal {
     fn new(variable: Variable, negate: bool) -> Literal {
@@ -32,8 +53,10 @@ impl fmt::Debug for Literal {
     }
 }
 
-type Clause = Vec<Literal>;
+/// A disjunction of literals
+pub type Clause = Vec<Literal>;
 
+/// An instance of the boolean satisfiability problem
 pub struct Sat {
     variables: Vec<String>,
     variable_table: HashMap<String, usize>,
@@ -41,6 +64,7 @@ pub struct Sat {
 }
 
 impl Sat {
+    /// Create a new, empty problem (no variables and no clauses)
     pub fn new() -> Sat {
         Sat {
             variables: Vec::new(),
@@ -49,7 +73,15 @@ impl Sat {
         }
     }
 
-    fn get_variable(&mut self, name: &str) -> Variable {
+    /// Return a new, unnamed variable
+    pub fn new_variable(&mut self) -> Variable {
+        let variable = self.variables.len();
+        self.variables.push(format!("unnamed_{}", variable));
+        Variable(variable)
+    }
+
+    /// Return the variable with the given name, creating it if necessary
+    pub fn get_variable(&mut self, name: &str) -> Variable {
         if let Some(&variable) = self.variable_table.get(name) {
             return Variable(variable);
         }
@@ -59,6 +91,25 @@ impl Sat {
         Variable(variable)
     }
 
+    /// Return the variable with the given name or None
+    pub fn get_existing_variable(&self, name: &str) -> Option<Variable> {
+        self.variable_table.get(name).map(|&i| Variable(i))
+    }
+
+    /// Return all the known variables
+    pub fn get_variables(&self) -> Vec<(&str, Variable)> {
+        self.variables.iter()
+            .enumerate()
+            .map(|(i, name)| (name as &str, Variable(i)))
+            .collect()
+    }
+
+    /// Add a clause (vector of literals representing a disjunction)
+    pub fn add_clause(&mut self, clause: Clause) {
+        self.clauses.push(clause);
+    }
+
+    /// Parse a string into a clause, adding the variables that didn't exist
     pub fn parse_and_add_clause(&mut self, text: &str) -> Result<(), ()> {
         let mut clause = Vec::new();
         let mut neg = false;
@@ -127,7 +178,8 @@ impl Sat {
         true
     }
 
-    pub fn solve(&self) -> Option<Vec<(&str, bool)>> {
+    /// Solve the problem and return a list of (Variable, bool)
+    pub fn solve(&self) -> Option<Vec<(Variable, bool)>> {
         // Create the assignment, with all variables set to None
         let mut assignment = Vec::with_capacity(self.variables.len());
         for _ in 0..self.variables.len() {
@@ -206,12 +258,21 @@ impl Sat {
 
         // Build result Vec: (name, value)
         Some(
+            assignment.into_iter().enumerate()
+                .map(|(i, b)| (Variable(i), b.unwrap()))
+                .collect()
+        )
+    }
+
+    /// Solve the problem and return a list of (variable_name, bool)
+    pub fn solve_named(&self) -> Option<Vec<(&str, bool)>> {
+        self.solve().map(|assignment|
             self.variables
                 .iter()
                 .map(|s| -> &str { s })
                 .zip(
                     assignment.into_iter()
-                        .map(Option::unwrap)
+                        .map(|(_, b)| b)
                 ).collect()
         )
     }
@@ -237,6 +298,10 @@ mod tests {
             sat.variables,
             vec!["A", "B", "C"].into_iter().map(Into::into).collect::<Vec<String>>(),
         );
+        assert_eq!(
+            sat.get_variables(),
+            vec![("A", Variable(0)), ("B", Variable(1)), ("C", Variable(2))],
+        );
         assert_eq!(sat.clauses, vec![vec![
             Literal::new(Variable(0), false),
             Literal::new(Variable(1), false),
@@ -261,12 +326,30 @@ mod tests {
     #[test]
     fn test_solve() {
         let mut sat = Sat::new();
+        let a = sat.get_variable("A");
+        let b = sat.get_variable("B");
+        let c = sat.get_variable("C");
+        sat.add_clause(vec![a.into(), b.into(), c.negate()]);
+        sat.add_clause(vec![b.into(), c.into()]);
+        sat.add_clause(vec![b.negate()]);
+        sat.add_clause(vec![a.negate(), c.into()]);
+
+        let assignment = sat.solve().unwrap();
+        assert_eq!(
+            assignment,
+            vec![(a, true), (b, false), (c, true)],
+        );
+    }
+
+    #[test]
+    fn test_parse_solve() {
+        let mut sat = Sat::new();
         sat.parse_and_add_clause(" A B ~C").unwrap();
         sat.parse_and_add_clause("   B  C").unwrap();
         sat.parse_and_add_clause("  ~B   ").unwrap();
         sat.parse_and_add_clause("~A    C").unwrap();
 
-        let assignment = sat.solve().unwrap();
+        let assignment = sat.solve_named().unwrap();
         assert_eq!(
             assignment,
             vec![("A", true), ("B", false), ("C", true)],
